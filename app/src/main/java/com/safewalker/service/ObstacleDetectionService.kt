@@ -32,6 +32,11 @@ import java.util.concurrent.Executors
 /**
  * Foreground service that uses CameraX + ML Kit to detect obstacles
  * and alert the user via the AlertManager.
+ *
+ * When the activity is in the foreground and showing the camera preview,
+ * the service defers camera binding to the activity (preview mode).
+ * When the activity goes to the background, the service resumes its own
+ * camera binding for analysis-only detection.
  */
 class ObstacleDetectionService : Service(), LifecycleOwner {
 
@@ -50,11 +55,35 @@ class ObstacleDetectionService : Service(), LifecycleOwner {
         private val _state = MutableStateFlow(DetectionState())
         val state: StateFlow<DetectionState> = _state.asStateFlow()
 
+        private var previewActive = false
+        private var instance: ObstacleDetectionService? = null
+
         fun isRunning(): Boolean = _state.value.isRunning
+
+        fun updateState(newState: DetectionState) {
+            _state.value = newState
+        }
+
+        fun setPreviewActive(active: Boolean) {
+            previewActive = active
+            if (!active) {
+                instance?.resumeServiceCamera()
+            } else {
+                instance?.pauseServiceCamera()
+            }
+        }
+
+        /**
+         * Called from the camera preview to trigger alerts via the service's AlertManager.
+         */
+        fun triggerAlert(dangerLevel: DangerLevel, message: String) {
+            instance?.triggerAlert(dangerLevel, message)
+        }
     }
 
     override fun onCreate() {
         super.onCreate()
+        instance = this
         lifecycleRegistry = LifecycleRegistry(this)
         lifecycleRegistry.currentState = Lifecycle.State.CREATED
 
@@ -68,8 +97,10 @@ class ObstacleDetectionService : Service(), LifecycleOwner {
         startForeground(DETECTION_NOTIFICATION_ID, createForegroundNotification())
         lifecycleRegistry.currentState = Lifecycle.State.STARTED
         lifecycleRegistry.currentState = Lifecycle.State.RESUMED
-        startCamera()
         _state.value = DetectionState(isRunning = true)
+        if (!previewActive) {
+            startCamera()
+        }
         return START_STICKY
     }
 
@@ -89,18 +120,37 @@ class ObstacleDetectionService : Service(), LifecycleOwner {
             .build()
     }
 
+    fun triggerAlert(dangerLevel: DangerLevel, message: String) {
+        alertManager.alert(dangerLevel, message)
+    }
+
+    private fun pauseServiceCamera() {
+        cameraProvider?.unbindAll()
+        Log.i(TAG, "Service camera paused — activity preview is active")
+    }
+
+    private fun resumeServiceCamera() {
+        if (_state.value.isRunning) {
+            startCamera()
+            Log.i(TAG, "Service camera resumed — activity preview is inactive")
+        }
+    }
+
     private fun startCamera() {
         val cameraProviderFuture = ProcessCameraProvider.getInstance(this)
         cameraProviderFuture.addListener({
             try {
                 cameraProvider = cameraProviderFuture.get()
-                bindAnalysis()
+                if (!previewActive) {
+                    bindAnalysis()
+                }
             } catch (e: Exception) {
                 Log.e(TAG, "Camera provider failed", e)
             }
         }, ContextCompat.getMainExecutor(this))
     }
 
+    @Suppress("DEPRECATION")
     private fun bindAnalysis() {
         val provider = cameraProvider ?: return
 
@@ -145,6 +195,7 @@ class ObstacleDetectionService : Service(), LifecycleOwner {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onDestroy() {
+        instance = null
         lifecycleRegistry.currentState = Lifecycle.State.DESTROYED
         cameraProvider?.unbindAll()
         cameraExecutor?.shutdown()
