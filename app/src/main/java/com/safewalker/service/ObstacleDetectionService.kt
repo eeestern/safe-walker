@@ -125,9 +125,7 @@ class ObstacleDetectionService : Service(), LifecycleOwner {
                     framesProcessed = _state.value.framesProcessed + 1
                 )
 
-                if (maxDanger.priority >= DangerLevel.LOW.priority) {
-                    alertManager.alert(maxDanger, warningMessage)
-                }
+                alertManager.alert(maxDanger, warningMessage)
             }
         }
 
