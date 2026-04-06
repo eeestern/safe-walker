@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">SafeWalker</string>
+    <string name="detection_channel_name">Obstacle Detection</string>
+    <string name="detection_channel_description">Shows when obstacle detection is active</string>
+    <string name="alert_channel_name">Danger Alerts</string>
+    <string name="alert_channel_description">Alerts for detected dangers</string>
+</resources>
