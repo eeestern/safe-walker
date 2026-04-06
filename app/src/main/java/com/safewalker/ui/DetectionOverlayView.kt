@@ -130,9 +130,14 @@ class DetectionOverlayView @JvmOverloads constructor(
                 distancePaint
             )
 
-            // Draw danger level badge at bottom of box
-            if (obstacle.dangerLevel != DangerLevel.NONE) {
-                val badgeText = dangerLabel
+            // Draw danger level + motion badge at bottom of box
+            if (obstacle.dangerLevel != DangerLevel.NONE || obstacle.isApproaching) {
+                val motionIndicator = when {
+                    obstacle.isApproaching -> " \u25B2"  // up arrow = approaching
+                    obstacle.isStationary && obstacle.stationaryFrames > 5 -> " \u25CF"  // dot = stationary
+                    else -> ""
+                }
+                val badgeText = "$dangerLabel$motionIndicator"
                 val badgeWidth = distancePaint.measureText(badgeText)
                 fillPaint.color = Color.argb(200, Color.red(color), Color.green(color), Color.blue(color))
                 canvas.drawRoundRect(

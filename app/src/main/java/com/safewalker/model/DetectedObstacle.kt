@@ -8,7 +8,11 @@ data class DetectedObstacle(
     val boundingBox: RectF,
     val category: ObstacleCategory,
     val dangerLevel: DangerLevel,
-    val estimatedDistance: Float // rough distance estimate based on bounding box size
+    val estimatedDistance: Float, // rough distance estimate based on bounding box size
+    val approachScore: Float = 0f, // [-1, 1]: positive = approaching, negative = receding
+    val isApproaching: Boolean = false,
+    val isStationary: Boolean = true,
+    val stationaryFrames: Int = 0 // how many consecutive frames this object has been stationary
 )
 
 enum class ObstacleCategory {
