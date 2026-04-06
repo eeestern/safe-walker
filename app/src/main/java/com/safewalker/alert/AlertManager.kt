@@ -148,7 +148,9 @@ class AlertManager(private val context: Context) {
     }
 
     private fun cancelAlert() {
-        lastDangerLevel = DangerLevel.NONE
+        // Do NOT reset lastDangerLevel here — if detection flickers through
+        // NONE for a frame or two, we still want the cooldown to apply against
+        // the previous danger level so we don't spam alerts.
         notificationManager.cancel(ALERT_NOTIFICATION_ID)
     }
 
