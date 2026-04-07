@@ -79,8 +79,8 @@ class DangerAssessor(
             val estimatedDistance = depthResult?.distanceMeters ?: estimateDistance(relativeSize)
             val depthSource = depthResult?.source?.displayName ?: "Est."
 
-            // Step 1: compute base danger from position/size/category
-            val baseDanger = assessBaseDanger(category, relativeSize, isInCenter, isLowInFrame)
+            // Step 1: compute base danger from position/size/category AND distance
+            val baseDanger = assessBaseDanger(category, relativeSize, isInCenter, isLowInFrame, estimatedDistance)
 
             // Step 2: adjust danger based on motion
             val adjustedDanger = adjustForMotion(baseDanger, motion, relativeSize)
@@ -107,7 +107,7 @@ class DangerAssessor(
      * Rules:
      * - IMMINENT collision (very large in frame): always HIGH, motion irrelevant
      * - APPROACHING (object growing): keep base danger or escalate by 1 level
-     * - STATIONARY for many frames: demote by 1-2 levels
+     * - STATIONARY: rapidly demote to NONE — user is not walking toward it
      * - RECEDING (object shrinking): demote to NONE
      */
     private fun adjustForMotion(
@@ -135,11 +135,20 @@ class DangerAssessor(
             }
         }
 
-        // Stationary objects: demote danger over time
-        if (motion.isStationary && motion.trackedFrames >= MotionTracker.STATIONARY_FRAMES_THRESHOLD) {
-            // Strongly stationary (tracked for many frames) -> demote by 2
-            val demoteBy = if (motion.trackedFrames >= MotionTracker.STATIONARY_FRAMES_THRESHOLD * 2) 2 else 1
-            return demoteDanger(baseDanger, demoteBy)
+        // Stationary objects: aggressively demote to NONE over time.
+        // If an object hasn't moved relative to the user for several frames,
+        // the user is not walking toward it — no alert needed.
+        if (motion.isStationary) {
+            val frames = motion.trackedFrames
+            return when {
+                // After 3x threshold (~15 frames): fully suppress
+                frames >= MotionTracker.STATIONARY_FRAMES_THRESHOLD * 3 -> DangerLevel.NONE
+                // After 2x threshold (~10 frames): demote by 3 levels (effectively NONE for most)
+                frames >= MotionTracker.STATIONARY_FRAMES_THRESHOLD * 2 -> demoteDanger(baseDanger, 3)
+                // After 1x threshold (~5 frames): demote by 2 levels
+                frames >= MotionTracker.STATIONARY_FRAMES_THRESHOLD -> demoteDanger(baseDanger, 2)
+                else -> baseDanger
+            }
         }
 
         // Default: trust the base danger (new object or just a few frames)
@@ -180,45 +189,61 @@ class DangerAssessor(
     }
 
     /**
-     * Base danger assessment from position, size, and category ONLY (no motion).
+     * Base danger assessment from position, size, category, AND estimated distance.
+     * Uses distance as the primary signal when available from depth sensor or intrinsics.
      */
     private fun assessBaseDanger(
         category: ObstacleCategory,
         relativeSize: Float,
         isInCenter: Boolean,
-        isLowInFrame: Boolean
+        isLowInFrame: Boolean,
+        estimatedDistance: Float = 5.0f
     ): DangerLevel {
-        // Street dangers are always at least MEDIUM
+        // Distance-aware thresholds (meters)
+        val isVeryClose = estimatedDistance < 1.0f
+        val isClose = estimatedDistance < 2.0f
+        val isNearby = estimatedDistance < 3.5f
+
+        // Street dangers: always serious if close
         if (category == ObstacleCategory.STREET_DANGER) {
-            return if (relativeSize > MEDIUM_OBJECT_THRESHOLD || isInCenter) {
-                DangerLevel.HIGH
-            } else {
-                DangerLevel.MEDIUM
+            return when {
+                isVeryClose || (isClose && isInCenter) -> DangerLevel.HIGH
+                isClose -> DangerLevel.MEDIUM
+                isNearby && isInCenter -> DangerLevel.MEDIUM
+                else -> DangerLevel.LOW
             }
         }
 
-        // Large objects directly ahead = HIGH danger
+        // Very large objects directly ahead = HIGH danger regardless of distance
         if (relativeSize > LARGE_OBJECT_THRESHOLD && isInCenter) {
             return DangerLevel.HIGH
         }
 
         // Trip hazards that are close and in path
         if (category == ObstacleCategory.TRIP_HAZARD && isLowInFrame && isInCenter) {
-            return if (relativeSize > MEDIUM_OBJECT_THRESHOLD) DangerLevel.HIGH else DangerLevel.MEDIUM
+            return when {
+                isVeryClose -> DangerLevel.HIGH
+                isClose -> DangerLevel.MEDIUM
+                else -> DangerLevel.LOW
+            }
         }
 
-        // Medium-sized objects in center
-        if (relativeSize > MEDIUM_OBJECT_THRESHOLD && isInCenter) {
-            return DangerLevel.MEDIUM
+        // Distance-based danger for objects in the center of view
+        if (isInCenter) {
+            return when {
+                isVeryClose -> DangerLevel.HIGH
+                isClose -> DangerLevel.MEDIUM
+                isNearby && relativeSize > 0.05f -> DangerLevel.LOW
+                else -> DangerLevel.NONE
+            }
         }
 
-        // Objects in center but small
-        if (isInCenter && relativeSize > 0.05f) {
-            return DangerLevel.LOW
+        // Objects off to the side: only dangerous if very close
+        return when {
+            isVeryClose -> DangerLevel.MEDIUM
+            isClose && relativeSize > MEDIUM_OBJECT_THRESHOLD -> DangerLevel.LOW
+            else -> DangerLevel.NONE
         }
-
-        // Objects off to the side or very small
-        return if (relativeSize > MEDIUM_OBJECT_THRESHOLD) DangerLevel.LOW else DangerLevel.NONE
     }
 
     private fun estimateDistance(relativeSize: Float): Float {

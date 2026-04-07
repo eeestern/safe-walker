@@ -97,7 +97,7 @@ class AlertManager(private val context: Context) {
     }
 
     fun alert(dangerLevel: DangerLevel, message: String) {
-        if (dangerLevel == DangerLevel.NONE) {
+        if (dangerLevel == DangerLevel.NONE || dangerLevel == DangerLevel.LOW) {
             cancelAlert()
             return
         }
