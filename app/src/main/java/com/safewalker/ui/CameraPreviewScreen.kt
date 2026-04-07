@@ -43,6 +43,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import com.safewalker.detection.DangerAssessor
+import com.safewalker.detection.DepthEstimator
 import com.safewalker.detection.ObjectDetectorHelper
 import com.safewalker.model.DangerLevel
 import com.safewalker.service.ObstacleDetectionService
@@ -63,7 +64,13 @@ fun CameraPreviewScreen(
     val state by ObstacleDetectionService.state.collectAsState()
 
     val cameraExecutor = remember { Executors.newSingleThreadExecutor() }
-    val dangerAssessor = remember { DangerAssessor() }
+    val depthEstimator = remember {
+        DepthEstimator(context).also {
+            it.initialize()
+            it.startDepthCamera()
+        }
+    }
+    val dangerAssessor = remember { DangerAssessor(depthEstimator) }
     val objectDetectorHelper = remember { ObjectDetectorHelper(context, dangerAssessor) }
 
     // Track overlay view reference for updates
@@ -75,6 +82,7 @@ fun CameraPreviewScreen(
             ObstacleDetectionService.setPreviewActive(false)
             cameraExecutor.shutdown()
             objectDetectorHelper.close()
+            depthEstimator.shutdown()
         }
     }
 
@@ -290,7 +298,7 @@ fun CameraPreviewScreen(
                         )
                         Spacer(modifier = Modifier.width(12.dp))
                         Text(
-                            text = "~${String.format("%.1f", obstacle.estimatedDistance)}m",
+                            text = "~${String.format("%.1f", obstacle.estimatedDistance)}m [${obstacle.depthSource}]",
                             color = Color(0xFF90CAF9),
                             fontSize = 14.sp,
                             fontWeight = FontWeight.SemiBold

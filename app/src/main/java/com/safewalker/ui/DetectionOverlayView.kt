@@ -92,7 +92,7 @@ class DetectionOverlayView @JvmOverloads constructor(
 
             // Draw label background
             val label = obstacle.label
-            val distance = "~${String.format("%.1f", obstacle.estimatedDistance)}m"
+            val distance = "~${String.format("%.1f", obstacle.estimatedDistance)}m [${obstacle.depthSource}]"
             val dangerLabel = obstacle.dangerLevel.label
 
             val labelText = "$label  $distance"

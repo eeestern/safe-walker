@@ -20,6 +20,7 @@ import com.safewalker.alert.AlertManager
 import com.safewalker.alert.AlertManager.Companion.DETECTION_CHANNEL_ID
 import com.safewalker.alert.AlertManager.Companion.DETECTION_NOTIFICATION_ID
 import com.safewalker.detection.DangerAssessor
+import com.safewalker.detection.DepthEstimator
 import com.safewalker.detection.ObjectDetectorHelper
 import com.safewalker.model.DangerLevel
 import com.safewalker.model.DetectionState
@@ -44,6 +45,7 @@ class ObstacleDetectionService : Service(), LifecycleOwner {
     private lateinit var alertManager: AlertManager
     private lateinit var objectDetectorHelper: ObjectDetectorHelper
     private lateinit var dangerAssessor: DangerAssessor
+    private lateinit var depthEstimator: DepthEstimator
     private var cameraExecutor: ExecutorService? = null
     private var cameraProvider: ProcessCameraProvider? = null
 
@@ -88,7 +90,9 @@ class ObstacleDetectionService : Service(), LifecycleOwner {
         lifecycleRegistry.currentState = Lifecycle.State.CREATED
 
         alertManager = AlertManager(this)
-        dangerAssessor = DangerAssessor()
+        depthEstimator = DepthEstimator(this)
+        depthEstimator.initialize()
+        dangerAssessor = DangerAssessor(depthEstimator)
         objectDetectorHelper = ObjectDetectorHelper(this, dangerAssessor)
         cameraExecutor = Executors.newSingleThreadExecutor()
     }
@@ -98,6 +102,7 @@ class ObstacleDetectionService : Service(), LifecycleOwner {
         lifecycleRegistry.currentState = Lifecycle.State.STARTED
         lifecycleRegistry.currentState = Lifecycle.State.RESUMED
         _state.value = DetectionState(isRunning = true)
+        depthEstimator.startDepthCamera()
         if (!previewActive) {
             startCamera()
         }
@@ -200,6 +205,7 @@ class ObstacleDetectionService : Service(), LifecycleOwner {
         cameraProvider?.unbindAll()
         cameraExecutor?.shutdown()
         objectDetectorHelper.close()
+        depthEstimator.shutdown()
         alertManager.shutdown()
         _state.value = DetectionState(isRunning = false)
         super.onDestroy()

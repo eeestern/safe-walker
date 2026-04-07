@@ -19,7 +19,9 @@ import com.safewalker.model.ObstacleCategory
  * 4. Exception: very close objects (>40% of frame) always stay HIGH regardless of motion,
  *    because you're about to collide even if nobody is moving
  */
-class DangerAssessor {
+class DangerAssessor(
+    private val depthEstimator: DepthEstimator? = null
+) {
 
     private val motionTracker = MotionTracker()
 
@@ -72,7 +74,10 @@ class DangerAssessor {
             val relativeSize = calculateRelativeSize(box, imageWidth, imageHeight)
             val isInCenter = isInCenterZone(box, imageWidth)
             val isLowInFrame = isLowInFrame(box, imageHeight)
-            val estimatedDistance = estimateDistance(relativeSize)
+            // Use DepthEstimator for distance (falls back to bounding box)
+            val depthResult = depthEstimator?.estimateDistance(box, label, imageWidth, imageHeight)
+            val estimatedDistance = depthResult?.distanceMeters ?: estimateDistance(relativeSize)
+            val depthSource = depthResult?.source?.displayName ?: "Est."
 
             // Step 1: compute base danger from position/size/category
             val baseDanger = assessBaseDanger(category, relativeSize, isInCenter, isLowInFrame)
@@ -87,6 +92,7 @@ class DangerAssessor {
                 category = category,
                 dangerLevel = adjustedDanger,
                 estimatedDistance = estimatedDistance,
+                depthSource = depthSource,
                 approachScore = motion.approachScore,
                 isApproaching = motion.isApproaching,
                 isStationary = motion.isStationary,
