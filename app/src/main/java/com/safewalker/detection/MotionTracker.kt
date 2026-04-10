@@ -123,7 +123,7 @@ class MotionTracker {
                 val smoothedScore = SMOOTHING_ALPHA * rawScore +
                         (1 - SMOOTHING_ALPHA) * bestMatch.motionData.approachScore
 
-                val trackedFrames = if (isStationary) {
+                val trackedFrames = if (isStationary && !isApproaching && !isReceding) {
                     bestMatch.motionData.trackedFrames + 1
                 } else {
                     0
