@@ -120,10 +120,12 @@ class DangerAssessor(
             return DangerLevel.HIGH
         }
 
-        // Receding objects are not a threat — if the object is shrinking
-        // (user walking away) OR the smoothed approach score is negative for
-        // several frames, suppress all alerts.
-        if (motion.isReceding || motion.recedingFrames >= 3 || motion.approachScore < -0.02f) {
+        // Receding objects are not a threat — but require sustained evidence
+        // to avoid false suppression from single-frame bounding box jitter.
+        // Don't use single-frame isReceding alone; require either:
+        //   - 3+ consecutive receding frames, OR
+        //   - smoothed approach score negative enough (resists single-frame noise)
+        if (motion.recedingFrames >= 3 || motion.approachScore < -0.03f) {
             return DangerLevel.NONE
         }
 
