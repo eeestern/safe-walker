@@ -120,8 +120,10 @@ class DangerAssessor(
             return DangerLevel.HIGH
         }
 
-        // Receding objects are not a threat
-        if (motion.approachScore < -0.05f && !motion.isStationary) {
+        // Receding objects are not a threat — if the object is shrinking
+        // (user walking away) OR the smoothed approach score is negative for
+        // several frames, suppress all alerts.
+        if (motion.isReceding || motion.recedingFrames >= 3 || motion.approachScore < -0.02f) {
             return DangerLevel.NONE
         }
 

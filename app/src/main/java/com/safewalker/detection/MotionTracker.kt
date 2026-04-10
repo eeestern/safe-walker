@@ -25,11 +25,17 @@ class MotionTracker {
         /** True if the object is growing in the frame (getting closer). */
         val isApproaching: Boolean = false,
 
+        /** True if the object is shrinking in the frame (moving away). */
+        val isReceding: Boolean = false,
+
         /** True if the object is roughly the same size across frames (stationary relative to user). */
         val isStationary: Boolean = true,
 
         /** Smoothed approach score in [-1, 1]. Positive = approaching, negative = receding. */
-        val approachScore: Float = 0f
+        val approachScore: Float = 0f,
+
+        /** How many consecutive frames the object has been receding. */
+        val recedingFrames: Int = 0
     )
 
     private data class TrackedObject(
@@ -53,6 +59,9 @@ class MotionTracker {
 
         /** Size change above this threshold (per frame) is considered approaching. */
         private const val APPROACH_THRESHOLD = 0.02f
+
+        /** Size change below negative of this threshold (per frame) is considered receding. */
+        private const val RECEDING_THRESHOLD = 0.015f
 
         /** Exponential smoothing factor for approach score. */
         private const val SMOOTHING_ALPHA = 0.4f
@@ -107,6 +116,7 @@ class MotionTracker {
 
                 val isStationary = Math.abs(sizeChange) < STATIONARY_THRESHOLD
                 val isApproaching = sizeChange > APPROACH_THRESHOLD
+                val isReceding = sizeChange < -RECEDING_THRESHOLD
 
                 // Smooth the approach score
                 val rawScore = sizeChange.coerceIn(-1f, 1f)
@@ -116,7 +126,13 @@ class MotionTracker {
                 val trackedFrames = if (isStationary) {
                     bestMatch.motionData.trackedFrames + 1
                 } else {
-                    // Reset stationary counter when motion detected
+                    0
+                }
+
+                // Count consecutive receding frames
+                val recedingFrames = if (isReceding || smoothedScore < -0.01f) {
+                    bestMatch.motionData.recedingFrames + 1
+                } else {
                     0
                 }
 
@@ -125,8 +141,10 @@ class MotionTracker {
                         sizeChangeRate = sizeChange,
                         trackedFrames = trackedFrames,
                         isApproaching = isApproaching,
+                        isReceding = isReceding,
                         isStationary = isStationary,
-                        approachScore = smoothedScore
+                        approachScore = smoothedScore,
+                        recedingFrames = recedingFrames
                     )
                 )
             } else {

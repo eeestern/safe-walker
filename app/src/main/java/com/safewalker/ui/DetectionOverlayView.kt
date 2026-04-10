@@ -134,6 +134,7 @@ class DetectionOverlayView @JvmOverloads constructor(
             if (obstacle.dangerLevel != DangerLevel.NONE || obstacle.isApproaching) {
                 val motionIndicator = when {
                     obstacle.isApproaching -> " \u25B2"  // up arrow = approaching
+                    obstacle.approachScore < -0.02f -> " \u25BC"  // down arrow = receding
                     obstacle.isStationary && obstacle.stationaryFrames > 5 -> " \u25CF"  // dot = stationary
                     else -> ""
                 }
