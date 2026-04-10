@@ -81,6 +81,12 @@ class ObstacleDetectionService : Service(), LifecycleOwner {
         fun triggerAlert(dangerLevel: DangerLevel, message: String) {
             instance?.triggerAlert(dangerLevel, message)
         }
+
+        /**
+         * Returns the service's DepthEstimator so the camera preview can
+         * share it instead of creating a conflicting one.
+         */
+        fun getDepthEstimator(): DepthEstimator? = instance?.depthEstimator
     }
 
     override fun onCreate() {
@@ -136,6 +142,7 @@ class ObstacleDetectionService : Service(), LifecycleOwner {
 
     private fun resumeServiceCamera() {
         if (_state.value.isRunning) {
+            depthEstimator.startDepthCamera()
             startCamera()
             Log.i(TAG, "Service camera resumed — activity preview is inactive")
         }
